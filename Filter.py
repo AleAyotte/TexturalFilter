@@ -48,29 +48,40 @@ class Filter(ABC):
         else:
             raise NotImplementedError
 
-    def convolve(self, images, aggregate=True, device="cpu"):
+    def _convolve(self, images, orthogonal_rot=False, device="cpu"):
         """
         Convolve a given n-dimensional array with the kernel to generate a filtered image.
 
         :param images: A n-dimensional numpy array that represent a batch of images to filter
-        :param aggregate: if true, aggregate the data if the kernel dimension is less than the images dimensions.
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
-        img_dims = len(np.shape(images)) - 1
 
-        padding = [int((self.kernel.shape[-1] - 1) / 2), int((self.kernel.shape[-2] - 1) / 2)]
+        in_size = np.shape(images)
 
-        if self.dim == 3:
-            padding.extend([int((self.kernel.shape[-3] - 1) / 2)])
+        # We only handle 2D or 3D images.
+        assert len(in_size) == 3 or len(in_size) == 4, \
+            "The tensor should have the followed shape (B, H, W) or (B, D, H, W)"
 
-        # If the kernel and the images have the same number of dimension
-        if img_dims == self.dim:
-            pad_list = [1, 2] if self.dim == 2 else [1, 2, 3]
+        if not orthogonal_rot:
 
-            padded_imgs = self.pad_imgs(images, padding, pad_list)  # We pad the images
+            # If we have a 2D kernel but a 3D images, we squeeze the tensor
+            if self.dim < len(in_size) - 1:
+                images = images.reshape((in_size[0] * in_size[1], in_size[2], in_size[3]))
+
+            # We compute the padding size along each dimension
+            padding = [int((self.kernel.shape[-1] - 1) / 2), int((self.kernel.shape[-2] - 1) / 2)]
+            pad_list = [1, 2]
+
+            if self.dim == 3:
+                padding.extend([int((self.kernel.shape[-3] - 1) / 2)])
+                pad_list.extend([3])
+
+            # We pad the images and we add the channel axis.
+            padded_imgs = self.pad_imgs(images, padding, pad_list)
             new_imgs = np.expand_dims(padded_imgs, axis=1)
-            print("new", new_imgs.shape)
+
             with torch.no_grad():
                 # Convert into torch tensor
                 _in = torch.from_numpy(new_imgs).float().to(device)
@@ -79,52 +90,31 @@ class Filter(ABC):
                 # Operate the convolution
                 result = self.conv(_in, _filter).to(device)
 
-        # If we have a 2D kernel but a batch of 3D images
-        elif img_dims == 3 and self.dim == 2:
-            # Swap the batch axis and the channel axis
-            swapped_imgs = np.swapaxes(images, 0, 1)
+                # Reshape the data to retrieve the following format: (B, C, D, H, W)
+                if self.dim < len(in_size) - 1:
+                    result = result.reshape((
+                        in_size[0], in_size[1], result.size()[1], in_size[2], in_size[3])
+                    ).permute(0, 2, 1, 3, 4)
 
-            # Rotate and pad the matrix
-            coronal_imgs = self.pad_imgs(
-                swapped_imgs,
-                padding, [2, 3])
-            axial_imgs = self.pad_imgs(
-                np.rot90(swapped_imgs, 1, (0, 2)),
-                padding, [2, 3])
-            sagittal_imgs = self.pad_imgs(
-                np.rot90(swapped_imgs, 1, (0, 3)),
-                padding, [2, 3])
-
-            with torch.no_grad():
-                # Convert into torch tensor
-                _filter = torch.from_numpy(self.kernel).float().to(device)
-                _in_coronal = torch.from_numpy(coronal_imgs).float().to(device)
-                _in_axial = torch.from_numpy(axial_imgs).float().to(device)
-                _in_sagittal = torch.from_numpy(sagittal_imgs).float().to(device)
-
-                # Operate the convolution and swap the axis to the no
-                result_coronal = F.conv2d(_in_coronal, _filter)
-                result_axial = F.conv2d(_in_axial, _filter)
-                result_sagittal = F.conv2d(_in_sagittal, _filter)
-
-                # Inverse the rotation
-                # result_axial = result_axial.rot90(1, [2, 0])
-                # result_sagittal = result_sagittal.rot90(1, [3, 0])
-
-                # If we want to aggregate the result we compute mean along the first axis.
-                if aggregate:
-                    # Aggregate the data
-                    result = torch.mean(
-                        torch.stack([result_coronal, result_axial, result_sagittal]),
-                        dim=0
-                    ).permute(1, 0, 2, 3)
-
-                else:
-                    result = torch.stack([result_coronal, result_axial, result_sagittal])
-
-        # We are actually to lazy to implement a convolution of a 4D images with 2D kernel.
+        # If we want orthogonal rotation
         else:
-            raise NotImplementedError
+            coronal_imgs = images
+            axial_imgs, sagittal_imgs = np.rot90(images, 1, (1, 2)), np.rot90(images, 1, (1, 3))
+
+            # We stack the images along the batch axis
+            new_imgs = np.concatenate(
+                (coronal_imgs, axial_imgs, sagittal_imgs),
+                axis=0
+            )
+
+            result = self._convolve(new_imgs, orthogonal_rot=False, device=device)
+
+            # split and unflip and stack the result on a new axis
+            batch = in_size[0]
+            result_coronal = result[0:batch, :, :, :, :]
+            result_axial = result[batch:2*batch, :, :, :, :].rot90(1, (3, 2))
+            result_sagittal = result[2*batch:3*batch, :, :, :, :].rot90(1, (4, 2))
+            result = torch.stack([result_coronal, result_axial, result_sagittal])
 
         return result
 
@@ -204,16 +194,16 @@ class LaplacianOfGaussian(Filter):
 
         self.kernel = np.expand_dims(kernel, axis=(0, 1))
 
-    def convolve(self, image, aggregate=True, device="cpu"):
+    def convolve(self, image, orthogonal_rot=False, device="cpu"):
         """
         Filter a given image using the LoG kernel defined during the construction of this instance.
 
         :param image: A n-dimensional numpy array that represent the image to filter
-        :param aggregate: if true, aggregate the data if the kernel dimension is less than the images dimensions.
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
-        return super().convolve(image, aggregate, device).cpu().numpy()
+        return self._convolve(image, orthogonal_rot, device).cpu().numpy()
 
 
 class Gabor(Filter):
@@ -274,25 +264,27 @@ class Gabor(Filter):
 
         self.kernel = np.expand_dims([real_kernel, im_kernel], axis=1)
 
-    def convolve(self, image, aggregate=True, device="cpu"):
+    def convolve(self, image, orthogonal_rot=False, device="cpu"):
         """
         Filter a given image using the Gabor kernel defined during the construction of this instance.
 
         :param image: A n-dimensional numpy array that represent the image to filter
-        :param aggregate: if true, aggregate the data if the kernel dimension is less than the images dimensions.
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image as a numpy ndarray
         """
 
-        result = super().convolve(image, False, device)
+        result = self._convolve(image, orthogonal_rot, device)
 
         with torch.no_grad():
-            result = torch.norm(result.to(device), dim=2)
 
-            if aggregate:
+            if orthogonal_rot:
                 # Aggregate the data
+                result = torch.norm(result.to(device), dim=2)
                 result = torch.mean(result, dim=0)
-
+            else:
+                result = torch.norm(result.to(device), dim=1)
+            print("shape final", result.size())
         return result.cpu().numpy()
 
 
@@ -365,14 +357,14 @@ class Laws(Filter):
 
         self.kernel = np.expand_dims(kernel, axis=(0, 1))
 
-    def convolve(self, image, aggregate=True, device="cpu"):
+    def convolve(self, image, orthogonal_rot=False, device="cpu"):
         """
         Filter a given image using the Laws kernel defined during the construction of this instance.
 
         :param image: A n-dimensional numpy array that represent the image to filter
-        :param aggregate: if true, aggregate the data if the kernel dimension is less than the images dimensions.
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
 
-        return super().convolve(image, aggregate, device).cpu().numpy()
+        return self._convolve(image, orthogonal_rot, device).cpu().numpy()
