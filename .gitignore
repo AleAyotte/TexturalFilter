@@ -1,0 +1,10 @@
+
+*.xml
+Code Martin/WORKSPACE_LinearFilters/.DS_Store
+*.m
+Code Martin/WORKSPACE_LinearFilters/Phantoms/checkerboard.nii.gz
+*.gz
+__pycache__/Filter.cpython-37.pyc
+.idea/TextureFilter.iml
+result.csv
+*.nrrd
