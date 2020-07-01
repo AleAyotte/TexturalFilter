@@ -71,15 +71,11 @@ class Filter(ABC):
                 images = images.reshape((in_size[0] * in_size[1], in_size[2], in_size[3]))
 
             # We compute the padding size along each dimension
-            padding = [int((self.kernel.shape[-1] - 1) / 2), int((self.kernel.shape[-2] - 1) / 2)]
-            pad_list = [1, 2]
-
-            if self.dim == 3:
-                padding.extend([int((self.kernel.shape[-3] - 1) / 2)])
-                pad_list.extend([3])
+            padding = [int((self.kernel.shape[-1] - 1) / 2) for _ in range(self.dim)]
+            pad_axis_list = [i for i in range(1, self.dim+1)]
 
             # We pad the images and we add the channel axis.
-            padded_imgs = self.pad_imgs(images, padding, pad_list)
+            padded_imgs = self._pad_imgs(images, padding, pad_axis_list)
             new_imgs = np.expand_dims(padded_imgs, axis=1)
 
             with torch.no_grad():
@@ -118,7 +114,7 @@ class Filter(ABC):
 
         return result
 
-    def pad_imgs(self, images, padding, axes):
+    def _pad_imgs(self, images, padding, axes):
         """
         Apply padding on a 3d images using a 2D padding pattern.
 
@@ -198,7 +194,7 @@ class LaplacianOfGaussian(Filter):
         """
         Filter a given image using the LoG kernel defined during the construction of this instance.
 
-        :param image: A n-dimensional numpy array that represent the image to filter
+        :param image: A n-dimensional numpy array that represent the images to filter
         :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
@@ -282,8 +278,8 @@ class Gabor(Filter):
         """
         Filter a given image using the Gabor kernel defined during the construction of this instance.
 
-        :param image: A n-dimensional numpy array that represent the image to filter
-        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
+        :param image: A n-dimensional numpy array that represent the images to filter
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagittal axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image as a numpy ndarray
         """
@@ -313,7 +309,7 @@ class Laws(Filter):
     The Laws filter class
     """
 
-    def __init__(self, config=None, padding="symmetric"):
+    def __init__(self, config=None, padding="symmetric", energy_distance=7):
         """
         The constructor of the Laws filter
 
@@ -328,7 +324,10 @@ class Laws(Filter):
         super().__init__(ndims, padding)
 
         self.config = config
+        self.energy_dist = energy_distance
+        self.energy_kernel = None
         self.create_kernel()
+        self.create_energy_kernel()
 
     @staticmethod
     def get_filter(name):
@@ -377,14 +376,55 @@ class Laws(Filter):
 
         self.kernel = np.expand_dims(kernel, axis=(0, 1))
 
-    def convolve(self, image, orthogonal_rot=False, device="cpu"):
+    def create_energy_kernel(self):
+        """
+        Create the kernel that will be used to generate Laws texture energy images
+
+        :return: A numpy multi-dimensional arrays that represent the Laws energy kernel.
+        """
+
+        # Initialize the kernel as tensor of zeros
+        kernel = np.zeros([self.energy_dist*2+1 for _ in range(self.dim)])
+
+        for k in product(range(self.energy_dist*2 + 1), repeat=self.dim):
+            position = np.array(k)-self.energy_dist
+            kernel[k] = 1 if abs(position[0]) + abs(position[1]) <= self.energy_dist else 0
+
+        self.energy_kernel = np.expand_dims(kernel/np.prod(kernel.shape), axis=(0, 1))
+
+    def _compute_energy_image(self, images, device="cpu"):
+        """
+        Compute the Laws texture energy images as described in (Ref 1).
+
+        :param images: A n-dimensional numpy array that represent the filtered images
+        :param device: On which device do we need to compute the convolution
+        :return:
+        """
+
+        padding = [self.energy_dist for _ in range(2*self.dim)]
+
+        with torch.no_grad():
+            # We pad the images with zero padding and convert the kernel into torch tensor
+            _in = torch.nn.functional.pad(images, padding)
+            _filter = torch.from_numpy(self.energy_kernel).float().to(device)
+
+            # Operate the convolution
+            return self.conv(_in, _filter).to(device)
+
+    def convolve(self, image, orthogonal_rot=False, energy_image=False, device="cpu"):
         """
         Filter a given image using the Laws kernel defined during the construction of this instance.
 
-        :param image: A n-dimensional numpy array that represent the image to filter
+        :param image: A n-dimensional numpy array that represent the images to filter
         :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
+        :param energy_image: If true, return also the Laws Texture Energy Images
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
+        if energy_image:
+            result = self._convolve(image, orthogonal_rot, device)
+            energy_imgs = self._compute_energy_image(result, device)
 
-        return self._convolve(image, orthogonal_rot, device).cpu().numpy()
+            return result, energy_imgs
+        else:
+            return self._convolve(image, orthogonal_rot, device).cpu().numpy()

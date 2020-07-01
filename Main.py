@@ -24,13 +24,21 @@ def get_input(image_name, repertory="Data"):
     :param repertory: The image repertory (Options: Data. Result_Martin)
     :return: a numpy nd-array of shape (B, W, H, D) with value between 0 and 1.
     """
+
     example_filename = os.path.join(
         "C:/Users/moial/OneDrive/Bureau/Maitrise/TexturalFilter", repertory, image_name + '.nii'
     )
     return np.expand_dims(np.array(nib.load(example_filename).dataobj), axis=0) / 255
 
 
-def get_image_and_filter(test_id):
+def get_images_and_filter(test_id):
+    """
+    Get the input and result images and the corresponding filter object according a given test_od.
+
+    :param test_id: The test identificator as string. "Exemple: 4a1"
+    :return: Two nd-arrays that represent the input and result images respectively and a filter object.
+    """
+
     VOLEX_LENGTH = 2
 
     if test_id == "2a":
@@ -133,7 +141,7 @@ def get_image_and_filter(test_id):
 
 
 def main(args):
-    _in, _out, _filter = get_image_and_filter(test_id=args.test_id)
+    _in, _out, _filter = get_images_and_filter(test_id=args.test_id)
     print(_in)
     return 0
 
