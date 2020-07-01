@@ -82,6 +82,7 @@ def get_image_and_filter(test_id):
         _filter = Gabor(ndims=2, size=size,
                         sigma=sigma, lamb=lamb,
                         gamma=0.5, theta=-math.pi/3,
+                        rot_invariance=False,
                         padding="constant"
                         )
 
@@ -94,6 +95,7 @@ def get_image_and_filter(test_id):
         _filter = Gabor(ndims=2, size=size,
                         sigma=sigma, lamb=lamb,
                         gamma=0.5, theta=-math.pi/4,
+                        rot_invariance=True,
                         padding="constant"
                         )
 
@@ -105,6 +107,7 @@ def get_image_and_filter(test_id):
         _filter = Gabor(ndims=2, size=size,
                         sigma=sigma, lamb=lamb,
                         gamma=2.5, theta=-5*math.pi/4,
+                        rot_invariance=False,
                         padding="symmetric"
                         )
 
@@ -117,6 +120,7 @@ def get_image_and_filter(test_id):
         _filter = Gabor(ndims=2, size=size,
                         sigma=sigma, lamb=lamb,
                         gamma=2.5, theta=-math.pi/8,
+                        rot_invariance=True,
                         padding="symmetric"
                         )
     else:

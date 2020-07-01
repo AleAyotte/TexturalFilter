@@ -211,7 +211,7 @@ class Gabor(Filter):
     The Gabor filter class
     """
 
-    def __init__(self, ndims, size, sigma, lamb, gamma, theta, padding="symmetric"):
+    def __init__(self, ndims, size, sigma, lamb, gamma, theta, rot_invariance=False, padding="symmetric"):
         """
         The constructor of the Gabor filter. Highly inspired by Ref 1)
 
@@ -221,6 +221,8 @@ class Gabor(Filter):
         :param lamb: A positive float that represent the wavelength in the Gabor filter. (mm or pixel?)
         :param gamma: A positive float that represent the spacial aspect ratio
         :param theta: Angle parameter used in the rotation matrix
+        :param rot_invariance: If true, rotation invariance will be done on the kernel and the kernel
+                               will be rotate 2*pi / theta times.
         :param padding: The padding type that will be used to produce the convolution
         """
 
@@ -236,7 +238,7 @@ class Gabor(Filter):
         self.lamb = lamb
         self.gamma = gamma
         self.theta = theta
-
+        self.rot = rot_invariance
         self.create_kernel()
 
     def create_kernel(self):
@@ -246,23 +248,35 @@ class Gabor(Filter):
         :return: A list of numpy 2D-array that contain the kernel of the real part and the imaginary part respectively.
         """
 
-        def compute_weight(position):
-            k2 = position[0]*math.cos(self.theta) + position[1] * math.sin(self.theta)
-            k1 = position[1]*math.cos(self.theta) - position[0] * math.sin(self.theta)
+        def compute_weight(position, theta):
+            k2 = position[0]*math.cos(theta) + position[1] * math.sin(theta)
+            k1 = position[1]*math.cos(theta) - position[0] * math.sin(theta)
 
             common = math.e**(-(k1**2 + (self.gamma*k2)**2)/(2*self.sigma**2))
             real = math.cos(2*math.pi*k1/self.lamb)
             im = math.sin(2*math.pi*k1/self.lamb)
             return common*real, common*im
 
-        # Initialize the kernel as tensor of zeros
-        real_kernel = np.zeros([self.size for _ in range(2)])
-        im_kernel = np.zeros([self.size for _ in range(2)])
+        # Rotation invariance
+        nb_rot = round(2*math.pi/abs(self.theta)) if self.rot else 1
+        real_list = []
+        im_list = []
 
-        for k in product(range(self.size), repeat=2):
-            real_kernel[k], im_kernel[k] = compute_weight(np.array(k)-int((self.size-1)/2))
+        for i in range(1, nb_rot+1):
+            # Initialize the kernel as tensor of zeros
+            real_kernel = np.zeros([self.size for _ in range(2)])
+            im_kernel = np.zeros([self.size for _ in range(2)])
 
-        self.kernel = np.expand_dims([real_kernel, im_kernel], axis=1)
+            for k in product(range(self.size), repeat=2):
+                real_kernel[k], im_kernel[k] = compute_weight(np.array(k)-int((self.size-1)/2), self.theta*i)
+
+            real_list.extend([real_kernel])
+            im_list.extend([im_kernel])
+
+        self.kernel = np.expand_dims(
+            np.concatenate((real_list, im_list), axis=0),
+            axis=1
+        )
 
     def convolve(self, image, orthogonal_rot=False, device="cpu"):
         """
@@ -277,14 +291,20 @@ class Gabor(Filter):
         result = self._convolve(image, orthogonal_rot, device)
 
         with torch.no_grad():
+            # Reshape two get real and imaginary response on the first axis.
+            _dim = 2 if orthogonal_rot else 1
+            nb_rot = int(result.size()[_dim]/2)
+            result = torch.stack(torch.split(result, nb_rot, _dim), dim=0)
 
-            if orthogonal_rot:
-                # Aggregate the data
-                result = torch.norm(result.to(device), dim=2)
-                result = torch.mean(result, dim=0)
-            else:
-                result = torch.norm(result.to(device), dim=1)
-            print("shape final", result.size())
+            # 2D modulus response map
+            result = torch.norm(result.to(device), dim=0)
+
+            # Rotation invariance.
+            result = torch.mean(result, dim=1)
+
+            # Aggregate orthogonal rotation
+            result = torch.mean(result, dim=0) if orthogonal_rot else result
+
         return result.cpu().numpy()
 
 
