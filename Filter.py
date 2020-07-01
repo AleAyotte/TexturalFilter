@@ -247,8 +247,8 @@ class Gabor(Filter):
         """
 
         def compute_weight(position):
-            k1 = position[0]*math.cos(self.theta) + position[1] * math.sin(self.theta)
-            k2 = position[1]*math.cos(self.theta) - position[0] * math.sin(self.theta)
+            k2 = position[0]*math.cos(self.theta) + position[1] * math.sin(self.theta)
+            k1 = position[1]*math.cos(self.theta) - position[0] * math.sin(self.theta)
 
             common = math.e**(-(k1**2 + (self.gamma*k2)**2)/(2*self.sigma**2))
             real = math.cos(2*math.pi*k1/self.lamb)
