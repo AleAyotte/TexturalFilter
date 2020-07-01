@@ -9,10 +9,11 @@
 """
 import argparse
 from Filter import LaplacianOfGaussian, Laws, Gabor
+import math
+import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
-import os, math
-import matplotlib.pyplot as plt
+import os
 
 
 def get_input(image_name, repertory="Data"):
@@ -24,7 +25,7 @@ def get_input(image_name, repertory="Data"):
     :return: a numpy nd-array of shape (B, W, H, D) with value between 0 and 1.
     """
     example_filename = os.path.join(
-        "C:/Users/moial/OneDrive/Bureau/Maitrise/TexturalFilter", repertory, image_name, '.nii'
+        "C:/Users/moial/OneDrive/Bureau/Maitrise/TexturalFilter", repertory, image_name + '.nii'
     )
     return np.expand_dims(np.array(nib.load(example_filename).dataobj), axis=0) / 255
 
@@ -128,7 +129,8 @@ def get_image_and_filter(test_id):
 
 
 def main(args):
-    print("ok")
+    _in, _out, _filter = get_image_and_filter(test_id=args.test_id)
+    print(_in)
     return 0
 
 
