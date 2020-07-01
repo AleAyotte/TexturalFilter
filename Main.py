@@ -29,6 +29,104 @@ def get_input(image_name, repertory="Data"):
     return np.expand_dims(np.array(nib.load(example_filename).dataobj), axis=0) / 255
 
 
+def get_image_and_filter(test_id):
+    VOLEX_LENGTH = 2
+
+    if test_id == "2a":
+        phantom_name = "response"
+        sigma = 3 / VOLEX_LENGTH
+        length = int(2 * 4 * sigma + 1)
+
+        _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="constant")
+
+    elif test_id == "2b":
+        phantom_name = "checkerboard"
+        sigma = 5 / VOLEX_LENGTH
+        length = int(2 * 4 * sigma + 1)
+        _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="symmetric")
+
+    elif test_id == "3a1":
+        phantom_name = "response"
+        _filter = Laws(["E5", "L5", "S5"], padding="constant")
+
+    elif test_id == "3a2":
+        # 3D rotation invariance, max pooling
+        phantom_name = "response"
+        _filter = Laws(["E5", "L5", "S5"], padding="constant")
+
+    elif test_id == "3a3":
+        # Energy map
+        phantom_name = "response"
+        _filter = Laws(["E5", "L5", "S5"], padding="constant")
+
+    elif test_id == "3b1":
+        phantom_name = "checkerboard"
+        _filter = Laws(["E3", "W5", "R5"], padding="symmetric")
+
+    elif test_id == "3b2":
+        # 3D rotation invariance, max pooling
+        phantom_name = "checkerboard"
+        _filter = Laws(["E3", "W5", "R5"], padding="symmetric")
+
+    elif test_id == "3b3":
+        # Energy map
+        phantom_name = "checkerboard"
+        _filter = Laws(["E3", "W5", "R5"], padding="symmetric")
+
+    elif test_id == "4a1":
+        phantom_name = "response"
+        sigma = 10 / VOLEX_LENGTH
+        lamb = 4 / VOLEX_LENGTH
+        size = 2*7*sigma+1
+        _filter = Gabor(ndims=2, size=size,
+                        sigma=sigma, lamb=lamb,
+                        gamma=0.5, theta=-math.pi/3,
+                        padding="constant"
+                        )
+
+    elif test_id == "4a2":
+        # Rotation invariance and orthogonal planes
+        phantom_name = "response"
+        sigma = 10 / VOLEX_LENGTH
+        lamb = 4 / VOLEX_LENGTH
+        size = 2*7*sigma+1
+        _filter = Gabor(ndims=2, size=size,
+                        sigma=sigma, lamb=lamb,
+                        gamma=0.5, theta=-math.pi/4,
+                        padding="constant"
+                        )
+
+    elif test_id == "4b1":
+        phantom_name = "sphere"
+        sigma = 20 / VOLEX_LENGTH
+        lamb = 8 / VOLEX_LENGTH
+        size = 2*7*sigma+1
+        _filter = Gabor(ndims=2, size=size,
+                        sigma=sigma, lamb=lamb,
+                        gamma=2.5, theta=-5*math.pi/4,
+                        padding="symmetric"
+                        )
+
+    elif test_id == "4b2":
+        # Rotation invariance and orthogonal planes
+        phantom_name = "sphere"
+        sigma = 20 / VOLEX_LENGTH
+        lamb = 8 / VOLEX_LENGTH
+        size = 2*7*sigma+1
+        _filter = Gabor(ndims=2, size=size,
+                        sigma=sigma, lamb=lamb,
+                        gamma=2.5, theta=-math.pi/8,
+                        padding="symmetric"
+                        )
+    else:
+        raise NotImplementedError
+
+    _in = get_input(phantom_name, "Data")
+    _out = get_input("Phase1_"+test_id, "Result_Martin")
+
+    return _in, _out, _filter
+
+
 def main(args):
     print("ok")
     return 0
@@ -47,5 +145,3 @@ if __name__ == '__main__':
     _args = parser.parse_args()
 
     main(_args)
-
-
