@@ -296,11 +296,10 @@ class Gabor(Filter):
             result = torch.norm(result.to(device), dim=0)
 
             # Rotation invariance.
-            result = torch.mean(result, dim=1)
+            result = torch.mean(result, dim=2) if orthogonal_rot else torch.mean(result, dim=1)
 
             # Aggregate orthogonal rotation
             result = torch.mean(result, dim=0) if orthogonal_rot else result
-
         return result.cpu().numpy()
 
 
