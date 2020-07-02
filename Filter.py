@@ -207,11 +207,10 @@ class Gabor(Filter):
     The Gabor filter class
     """
 
-    def __init__(self, ndims, size, sigma, lamb, gamma, theta, rot_invariance=False, padding="symmetric"):
+    def __init__(self, size, sigma, lamb, gamma, theta, rot_invariance=False, padding="symmetric"):
         """
         The constructor of the Gabor filter. Highly inspired by Ref 1)
 
-        :param ndims: Number of dimension of the kernel filter
         :param size: An integer that represent the length along one dimension of the kernel.
         :param sigma: A positive float that represent the scale of the Gabor filter
         :param lamb: A positive float that represent the wavelength in the Gabor filter. (mm or pixel?)
@@ -222,12 +221,11 @@ class Gabor(Filter):
         :param padding: The padding type that will be used to produce the convolution
         """
 
-        assert isinstance(ndims, int) and ndims > 0, "ndims should be a positive integer"
         assert ((size + 1) / 2).is_integer() and size > 0, "size should be a positive odd number."
         assert sigma > 0, "sigma should be a positive float"
         assert lamb > 0, "lamb represent the wavelength, so it should be a positive float"
         assert gamma > 0, "gamma is the ellipticity of the support of the filter, so it should be a positive float"
-        super().__init__(ndims, padding)
+        super().__init__(ndims=2, padding=padding)
 
         self.size = size
         self.sigma = sigma
