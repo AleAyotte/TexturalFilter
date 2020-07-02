@@ -19,7 +19,7 @@ import math
 import torch
 from torch.nn import functional as F
 from abc import ABC, abstractmethod
-from itertools import product
+from itertools import product, permutations
 
 
 class Filter(ABC):
@@ -309,7 +309,7 @@ class Laws(Filter):
     The Laws filter class
     """
 
-    def __init__(self, config=None, padding="symmetric", energy_distance=7):
+    def __init__(self, config=None, padding="symmetric", energy_distance=7, rot_invariance=False):
         """
         The constructor of the Laws filter
 
@@ -317,6 +317,8 @@ class Laws(Filter):
                        not commutative, we need to use a list to specify the order of the outer product. It is not
                        recommended to use filter of different size to create the Laws kernel.
         :param padding: The padding type that will be used to produce the convolution
+        :param energy_distance: The distance that will be used to create the energy_kernel.
+        :param rot_invariance: If true, rotation invariance will be done on the kernel.
         """
 
         ndims = len(config)
@@ -325,29 +327,34 @@ class Laws(Filter):
 
         self.config = config
         self.energy_dist = energy_distance
+        self.rot = rot_invariance
         self.energy_kernel = None
         self.create_kernel()
-        self.create_energy_kernel()
+        self.__create_energy_kernel()
 
     @staticmethod
-    def get_filter(name):
+    def __get_filter(name, pad=False):
         """
         This method create a 1D filter according to the given filter name.
 
         :param name: The filter name. (Such as L3, L5, E3, E5, S3, S5, W5 or R5)
+        :param pad: If true, add zero padding of lenght 1 each side of kernel L3, E3 and S3
         :return: A 1D filter that is needed to construct the Laws kernel.
         """
 
         if name == "L3":
-            return 1/math.sqrt(6) * np.array([1, 2, 1])
+            ker = np.array([0, 1, 2, 1, 0]) if pad else np.array([1, 2, 1])
+            return 1/math.sqrt(6) * ker
         elif name == "L5":
             return 1/math.sqrt(70) * np.array([1, 4, 6, 4, 1])
         elif name == "E3":
-            return 1 / math.sqrt(2) * np.array([-1, 0, 1])
+            ker = np.array([0, -1, 0, 1, 0]) if pad else np.array([-1, 0, 1])
+            return 1 / math.sqrt(2) * ker
         elif name == "E5":
             return 1 / math.sqrt(10) * np.array([-1, -2, 0, 2, 1])
         elif name == "S3":
-            return 1 / math.sqrt(6) * np.array([-1, 2, -1])
+            ker = np.array([0, -1, 2, -1, 0]) if pad else np.array([-1, 2, -1])
+            return 1 / math.sqrt(6) * ker
         elif name == "S5":
             return 1 / math.sqrt(6) * np.array([-1, 0, 2, 0, -1])
         elif name == "W5":
@@ -358,6 +365,17 @@ class Laws(Filter):
             raise Exception("{} is not a valid filter name. "
                             "Choose between, L3, L5, E3, E5, S3, S5, W5, R5".format(name))
 
+    def __verify_padding_need(self):
+        """
+        Check if we need to pad the kernels
+
+        :return: A boolean that indicate if a kernel is smaller than at least one other.
+        """
+
+        ker_length = np.array([int(name[-1]) for name in self.config])
+
+        return not(ker_length.min == ker_length.max)
+
     def create_kernel(self):
         """
         Create the Laws by computing the outer product of 1d filter specified in the config attribute.
@@ -365,18 +383,34 @@ class Laws(Filter):
 
         :return: A numpy multi-dimensional arrays that represent the Laws kernel.
         """
-        kernel = self.get_filter(self.config[0])
-        shape = kernel.shape
 
-        for i in range(1, len(self.config)):
-            sub_kernel = self.get_filter(self.config[i])
-            shape += np.shape(sub_kernel)
+        pad = self.__verify_padding_need()
+        filter_list = np.array([[self.__get_filter(name, pad) for name in self.config]])
 
-            kernel = np.outer(kernel, sub_kernel).reshape(shape)
+        if self.rot:
+            filter_list = np.unique(
+                np.concatenate((filter_list, np.flip(filter_list, axis=2)), axis=1),
+                axis=1
+            )
+            print(filter_list)
+            filter_list = [perm for perm in permutations(np.squeeze(filter_list), 3)]
+            print(len(filter_list))
+        kernel_list = []
 
-        self.kernel = np.expand_dims(kernel, axis=(0, 1))
+        for perm in filter_list:
+            kernel = perm[0]
+            shape = kernel.shape
 
-    def create_energy_kernel(self):
+            for i in range(1, len(perm)):
+                sub_kernel = perm[i]
+                shape += np.shape(sub_kernel)
+                kernel = np.outer(sub_kernel, kernel).reshape(shape)
+
+            kernel_list.extend([np.expand_dims(np.flip(kernel, axis=(-1, 1)), axis=0)])
+
+        self.kernel = np.array(kernel_list)
+
+    def __create_energy_kernel(self):
         """
         Create the kernel that will be used to generate Laws texture energy images
 
@@ -392,7 +426,7 @@ class Laws(Filter):
 
         self.energy_kernel = np.expand_dims(kernel/np.prod(kernel.shape), axis=(0, 1))
 
-    def _compute_energy_image(self, images, device="cpu"):
+    def __compute_energy_image(self, images, device="cpu"):
         """
         Compute the Laws texture energy images as described in (Ref 1).
 
@@ -421,10 +455,14 @@ class Laws(Filter):
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
+        if orthogonal_rot:
+            raise NotImplementedError
+
         if energy_image:
             result = self._convolve(image, orthogonal_rot, device)
-            energy_imgs = self._compute_energy_image(result, device)
+            energy_imgs = self.__compute_energy_image(result, device)
 
-            return result, energy_imgs
+            return result.cpu().numpy(), energy_imgs.cpu().numpy()
         else:
-            return self._convolve(image, orthogonal_rot, device).cpu().numpy()
+            result, _ = torch.max(self._convolve(image, orthogonal_rot, device), dim=1)
+            return result.cpu().numpy()
