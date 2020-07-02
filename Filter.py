@@ -388,13 +388,16 @@ class Laws(Filter):
         filter_list = np.array([[self.__get_filter(name, pad) for name in self.config]])
 
         if self.rot:
-            filter_list = np.unique(
-                np.concatenate((filter_list, np.flip(filter_list, axis=2)), axis=1),
-                axis=1
-            )
-            print(filter_list)
-            filter_list = [perm for perm in permutations(np.squeeze(filter_list), 3)]
-            print(len(filter_list))
+            filter_list = np.concatenate((filter_list, np.flip(filter_list, axis=2)), axis=0)
+            prod_list = [prod for prod in product(*np.swapaxes(filter_list, 0, 1))]
+
+            perm_list = []
+            for i in range(len(prod_list)):
+                perm_list.extend([perm for perm in permutations(prod_list[i])])
+
+            perm_list = np.unique(perm_list, axis=0)
+            filter_list = perm_list
+
         kernel_list = []
 
         for perm in filter_list:
