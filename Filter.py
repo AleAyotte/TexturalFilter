@@ -425,7 +425,7 @@ class Laws(Filter):
 
         for k in product(range(self.energy_dist*2 + 1), repeat=self.dim):
             position = np.array(k)-self.energy_dist
-            kernel[k] = 1 if abs(position[0]) + abs(position[1]) <= self.energy_dist else 0
+            kernel[k] = 1 if np.max(abs(position)) <= self.energy_dist else 0
 
         self.energy_kernel = np.expand_dims(kernel/np.prod(kernel.shape), axis=(0, 1))
 
@@ -438,15 +438,13 @@ class Laws(Filter):
         :return:
         """
 
-        padding = [self.energy_dist for _ in range(2*self.dim)]
-
         with torch.no_grad():
-            # We pad the images with zero padding and convert the kernel into torch tensor
-            _in = torch.nn.functional.pad(images, padding)
+            # We convert the kernel and to images into torch tensor
+            _in = torch.from_numpy(images).float().to(device)
             _filter = torch.from_numpy(self.energy_kernel).float().to(device)
 
             # Operate the convolution
-            return self.conv(_in, _filter).to(device)
+            return self.conv(_in.abs_(), _filter).to(device)
 
     def convolve(self, image, orthogonal_rot=False, energy_image=False, device="cpu"):
         """
@@ -458,14 +456,23 @@ class Laws(Filter):
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
+
         if orthogonal_rot:
             raise NotImplementedError
 
-        if energy_image:
-            result = self._convolve(image, orthogonal_rot, device)
-            energy_imgs = self.__compute_energy_image(result, device)
+        result = self._convolve(image, orthogonal_rot, device)
 
+        if energy_image:
+            # We pad the response map
+            padding = [self.energy_dist for _ in range(2 * self.dim)]
+            pad_axis_list = [i for i in range(2, self.dim + 2)]
+
+            response = self._pad_imgs(result.cpu().numpy(), padding, pad_axis_list)
+
+            # We compute the energy map and we apply the max pooling on the energy and the response maps
+            energy_imgs, _ = torch.max(self.__compute_energy_image(np.swapaxes(response, 0, 1), device), dim=0)
+            result, _ = torch.max(result, dim=1)
             return result.cpu().numpy(), energy_imgs.cpu().numpy()
         else:
-            result, _ = torch.max(self._convolve(image, orthogonal_rot, device), dim=1)
+            result, _ = torch.max(result, dim=1)
             return result.cpu().numpy()
