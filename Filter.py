@@ -199,7 +199,10 @@ class LaplacianOfGaussian(Filter):
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
-        return self._convolve(image, orthogonal_rot, device).cpu().numpy()
+        # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
+        image = np.swapaxes(image, 1, 3)
+        result = torch.squeeze(self._convolve(image, orthogonal_rot, device), dim=1)
+        return np.swapaxes(result.cpu().numpy(), 1, 3)
 
 
 class Gabor(Filter):
@@ -282,6 +285,9 @@ class Gabor(Filter):
         :return: The filtered image as a numpy ndarray
         """
 
+        # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
+        image = np.swapaxes(image, 1, 3)
+
         result = self._convolve(image, orthogonal_rot, device)
 
         with torch.no_grad():
@@ -298,7 +304,7 @@ class Gabor(Filter):
 
             # Aggregate orthogonal rotation
             result = torch.mean(result, dim=0) if orthogonal_rot else result
-        return result.cpu().numpy()
+        return np.swapaxes(result.cpu().numpy(), 1, 3)
 
 
 class Laws(Filter):
@@ -454,6 +460,9 @@ class Laws(Filter):
         :return: The filtered image
         """
 
+        # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
+        image = np.swapaxes(image, 1, 3)
+
         if orthogonal_rot:
             raise NotImplementedError
 
@@ -469,7 +478,8 @@ class Laws(Filter):
             # We compute the energy map and we apply the max pooling on the energy and the response maps
             energy_imgs, _ = torch.max(self.__compute_energy_image(np.swapaxes(response, 0, 1), device), dim=0)
             result, _ = torch.max(result, dim=1)
-            return result.cpu().numpy(), energy_imgs.cpu().numpy()
+
+            return np.swapaxes(result.cpu().numpy(), 1, 3), np.swapaxes(energy_imgs.cpu().numpy(), 1, 3)
         else:
             result, _ = torch.max(result, dim=1)
-            return result.cpu().numpy()
+            return np.swapaxes(result.cpu().numpy(), 1, 3)
