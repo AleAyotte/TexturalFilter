@@ -3,7 +3,7 @@
     @Author:            Alexandre Ayotte
 
     @Creation Date:     01/07/2020
-    @Last modification: 01/07/2020
+    @Last modification: 02/07/2020
 
     @Description:       Main program used to test the Filter class and it subclasses.
 """
@@ -26,119 +26,170 @@ def get_input(image_name, repertory="Data"):
     """
 
     example_filename = os.path.join(
-        "C:/Users/moial/OneDrive/Bureau/Maitrise/TexturalFilter", repertory, image_name + '.nii'
+        repertory, image_name + '.nii'
     )
-    return np.expand_dims(np.array(nib.load(example_filename).dataobj), axis=0) / 255
+    return np.expand_dims(np.array(nib.load(example_filename).dataobj), axis=0)
 
 
-def get_images_and_filter(test_id):
+def execute_test(test_id, device="cpu"):
     """
-    Get the input and result images and the corresponding filter object according a given test_od.
+    Get the input and result images and the corresponding filter object according a given test_id.
 
     :param test_id: The test identificator as string. "Exemple: 4a1"
-    :return: Two nd-arrays that represent the input and result images respectively and a filter object.
+    :param device: On which device do we need to compute the convolution
+    :return: Three nd-arrays that represent the input, the result and the ground truth images respectively.
     """
 
     VOLEX_LENGTH = 2
 
     if test_id == "2a":
-        phantom_name = "response"
+        _in = get_input("response", "Data")
         sigma = 3 / VOLEX_LENGTH
         length = int(2 * 4 * sigma + 1)
 
         _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="constant")
+        result = _filter.convolve(_in, device=device)
 
     elif test_id == "2b":
-        phantom_name = "checkerboard"
+        _in = get_input("checkerboard", "Data")
         sigma = 5 / VOLEX_LENGTH
         length = int(2 * 4 * sigma + 1)
         _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="symmetric")
+        result = _filter.convolve(_in, device=device)
 
     elif test_id == "3a1":
-        phantom_name = "response"
+        _in = get_input("response", "Data")
         _filter = Laws(["E5", "L5", "S5"], padding="constant", rot_invariance=False)
+        result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3a2":
-        # 3D rotation invariance, max pooling
-        phantom_name = "response"
+        _in = get_input("response", "Data")
         _filter = Laws(["E5", "L5", "S5"], padding="constant", rot_invariance=True)
+        result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3a3":
-        # Energy map
-        phantom_name = "response"
+        _in = get_input("response", "Data")
         _filter = Laws(["E5", "L5", "S5"], padding="constant", rot_invariance=True)
+        _, result = _filter.convolve(_in, energy_image=True, device=device)
 
     elif test_id == "3b1":
-        phantom_name = "checkerboard"
-        _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=False)
+        _in = get_input("checkerboard", "Data")
+        _filter = Laws(["E5", "W5", "R5"], padding="symmetric", rot_invariance=False)
+        result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3b2":
-        # 3D rotation invariance, max pooling
-        phantom_name = "checkerboard"
-        _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        _in = get_input("checkerboard", "Data")
+        _filter = Laws(["E5", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3b3":
-        # Energy map
-        phantom_name = "checkerboard"
-        _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        _in = get_input("checkerboard", "Data")
+        _filter = Laws(["E5", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        _, result = _filter.convolve(_in, energy_image=True, device=device)
 
     elif test_id == "4a1":
-        phantom_name = "response"
+        _in = get_input("response", "Data")
         sigma = 10 / VOLEX_LENGTH
         lamb = 4 / VOLEX_LENGTH
-        size = 2*7*sigma+1
+        size = int(2*7*sigma+1)
         _filter = Gabor(size=size, sigma=sigma, lamb=lamb,
                         gamma=0.5, theta=-math.pi/3,
                         rot_invariance=False,
                         padding="constant"
                         )
+        result = _filter.convolve(_in, False, device=device)
 
     elif test_id == "4a2":
-        # Rotation invariance and orthogonal planes
-        phantom_name = "response"
+        _in = get_input("response", "Data")
         sigma = 10 / VOLEX_LENGTH
         lamb = 4 / VOLEX_LENGTH
-        size = 2*7*sigma+1
+        size = int(2*7*sigma+1)
         _filter = Gabor(size=size, sigma=sigma, lamb=lamb,
                         gamma=0.5, theta=-math.pi/4,
                         rot_invariance=True,
                         padding="constant"
                         )
+        result = _filter.convolve(_in, True, device=device)
 
     elif test_id == "4b1":
-        phantom_name = "sphere"
+        _in = get_input("sphere", "Data")
         sigma = 20 / VOLEX_LENGTH
         lamb = 8 / VOLEX_LENGTH
-        size = 2*7*sigma+1
+        size = int(2*7*sigma+1)
         _filter = Gabor(size=size, sigma=sigma, lamb=lamb,
                         gamma=2.5, theta=-5*math.pi/4,
                         rot_invariance=False,
                         padding="symmetric"
                         )
+        result = _filter.convolve(_in, False, device=device)
 
     elif test_id == "4b2":
-        # Rotation invariance and orthogonal planes
-        phantom_name = "sphere"
+        _in = get_input("sphere", "Data")
         sigma = 20 / VOLEX_LENGTH
         lamb = 8 / VOLEX_LENGTH
-        size = 2*7*sigma+1
+        size = int(2*7*sigma+1)
         _filter = Gabor(size=size, sigma=sigma, lamb=lamb,
                         gamma=2.5, theta=-math.pi/8,
                         rot_invariance=True,
                         padding="symmetric"
                         )
+        result = _filter.convolve(_in, True, device=device)
     else:
         raise NotImplementedError
 
-    _in = get_input(phantom_name, "Data")
-    _out = get_input("Phase1_"+test_id, "Result_Martin")
+    ground_truth = get_input("Phase1_"+test_id, "Result_Martin")
 
-    return _in, _out, _filter
+    return _in, result / 255, ground_truth / 255
+
+
+def plot_comparison(result, ground_truth, _slice):
+    """
+    Plot the coronal, axial and sagittal slices of the ground truth, the result and their squared error
+
+    :param result: The result obtained by the program.
+    :param ground_truth: The result obtained by Martin Vallières
+    :param _slice: Which slice will be plot along each axis.
+    """
+
+    error = (ground_truth - result) ** 2
+    mean_square_error = np.mean(error)
+
+    fig = plt.figure(figsize=(12, 12))
+    fig.suptitle('Mean square error: {}'.format(mean_square_error), fontsize=16)
+
+    fig.add_subplot(3, 3, 1, ylabel="Ground truth", title="Coronal")
+    plt.imshow(ground_truth[0, :, :, _slice])
+
+    fig.add_subplot(3, 3, 2, title="Axial")
+    plt.imshow(ground_truth[0, :, _slice, :])
+
+    fig.add_subplot(3, 3, 3, title="Sagittal")
+    plt.imshow(ground_truth[0, _slice, :, :])
+
+    fig.add_subplot(3, 3, 4, ylabel="Result")
+    plt.imshow(result[0, :, :, _slice])
+
+    fig.add_subplot(3, 3, 5)
+    plt.imshow(result[0, :, _slice, :])
+
+    fig.add_subplot(3, 3, 6)
+    plt.imshow(result[0, _slice, :, :])
+
+    fig.add_subplot(3, 3, 7, ylabel="square error")
+    plt.imshow(error[0, :, :, _slice])
+
+    fig.add_subplot(3, 3, 8)
+    plt.imshow(error[0, :, _slice, :])
+
+    fig.add_subplot(3, 3, 9)
+    plt.imshow(error[0, _slice, :, :])
+
+    plt.show()
 
 
 def main(args):
-    _in, _out, _filter = get_images_and_filter(test_id=args.test_id)
-    print(_in)
+    _in, result, ground_truth = execute_test(test_id=args.test_id, device=args.device)
+    plot_comparison(result, ground_truth, _slice=args.slice)
     return 0
 
 
@@ -149,9 +200,22 @@ if __name__ == '__main__':
         '--test_id',
         type=str,
         default='',
-        help='Test à effectuer.'
+        help='Test to execute.'
     )
 
+    parser.add_argument(
+        '--device',
+        type=str,
+        default='cpu',
+        help="On which device the result will be compute. (Exemple: 'cpu' or 'cuda:0'"
+    )
+
+    parser.add_argument(
+        '--slice',
+        type=int,
+        default=31,
+        help='Which slice will be plot..'
+    )
     _args = parser.parse_args()
 
     main(_args)

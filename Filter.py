@@ -3,7 +3,7 @@
     @Author:            Alexandre Ayotte
 
     @Creation Date:     06/06/2020
-    @Last modification: 07/06/2020
+    @Last modification: 02/07/2020
 
     @Reference: 1)      IBSI Volume 2: Standardised convolutional filtering for Radiomics, Adrien Depeursinge,
                         Vincent Andrearczyk, Philip Whybra, Joost van Griethuysen, Henning Müller, Roger Schaer
