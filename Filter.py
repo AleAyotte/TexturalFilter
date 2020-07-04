@@ -14,12 +14,13 @@
                         1D, 2D and 3D in most of the case.
 """
 
-import numpy as np
-import math
-import torch
-from torch.nn import functional as F
 from abc import ABC, abstractmethod
 from itertools import product, permutations
+import math
+import numpy as np
+import pywt
+import torch
+from torch.nn import functional as F
 
 
 class Filter(ABC):
@@ -190,17 +191,17 @@ class LaplacianOfGaussian(Filter):
 
         self.kernel = np.expand_dims(kernel, axis=(0, 1))
 
-    def convolve(self, image, orthogonal_rot=False, device="cpu"):
+    def convolve(self, images, orthogonal_rot=False, device="cpu"):
         """
         Filter a given image using the LoG kernel defined during the construction of this instance.
 
-        :param image: A n-dimensional numpy array that represent the images to filter
+        :param images: A n-dimensional numpy array that represent the images to filter
         :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
         """
         # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
-        image = np.swapaxes(image, 1, 3)
+        image = np.swapaxes(images, 1, 3)
         result = torch.squeeze(self._convolve(image, orthogonal_rot, device), dim=1)
         return np.swapaxes(result.cpu().numpy(), 1, 3)
 
@@ -275,18 +276,18 @@ class Gabor(Filter):
             axis=1
         )
 
-    def convolve(self, image, orthogonal_rot=False, device="cpu"):
+    def convolve(self, images, orthogonal_rot=False, device="cpu"):
         """
         Filter a given image using the Gabor kernel defined during the construction of this instance.
 
-        :param image: A n-dimensional numpy array that represent the images to filter
+        :param images: A n-dimensional numpy array that represent the images to filter
         :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagittal axis
         :param device: On which device do we need to compute the convolution
         :return: The filtered image as a numpy ndarray
         """
 
         # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
-        image = np.swapaxes(image, 1, 3)
+        image = np.swapaxes(images, 1, 3)
 
         result = self._convolve(image, orthogonal_rot, device)
 
@@ -449,11 +450,11 @@ class Laws(Filter):
             # Operate the convolution
             return self.conv(_in.abs_(), _filter).to(device)
 
-    def convolve(self, image, orthogonal_rot=False, energy_image=False, device="cpu"):
+    def convolve(self, images, orthogonal_rot=False, energy_image=False, device="cpu"):
         """
         Filter a given image using the Laws kernel defined during the construction of this instance.
 
-        :param image: A n-dimensional numpy array that represent the images to filter
+        :param images: A n-dimensional numpy array that represent the images to filter
         :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
         :param energy_image: If true, return also the Laws Texture Energy Images
         :param device: On which device do we need to compute the convolution
@@ -461,7 +462,7 @@ class Laws(Filter):
         """
 
         # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
-        image = np.swapaxes(image, 1, 3)
+        image = np.swapaxes(images, 1, 3)
 
         if orthogonal_rot:
             raise NotImplementedError
@@ -483,3 +484,48 @@ class Laws(Filter):
         else:
             result, _ = torch.max(result, dim=1)
             return np.swapaxes(result.cpu().numpy(), 1, 3)
+
+
+class Wavelet():
+    """
+    The wavelet filter class
+    """
+
+    def __init__(self, ndims, wavelet_name="haar", padding="symmetric", rot_invariance=False):
+        """
+        The constructor of the wavelet filter
+
+        :param ndims: The number of dimension of the images that will be filter as int.
+        :param wavelet_name: The name of the wavelet kernel as string.
+        :param padding: The padding type that will be used to produce the convolution
+        :param rot_invariance: If true, rotation invariance will be done on the images.
+        """
+
+        assert isinstance(ndims, int) and ndims > 0, "ndims should be a positive integer"
+
+        # super().__init__(ndims, padding)
+
+        self.dim = ndims
+        self.padding = padding
+        self.rot = rot_invariance
+        self.wavelet = pywt.Wavelet(wavelet_name)
+
+    def convolve(self, images, _filter="LHL", level=1):
+        """
+
+        :param images: A n-dimensional numpy array that represent the images to filter
+        :param _filter: The filter to uses.
+        :param level: The number of decomposition step to perform.
+        :return: The filtered image as numpy nd-array
+        """
+        axis_list = [-i for i in range(self.dim)]
+        _index = str().join(['a' if _filter[i] == 'L' else 'd' for i in range(len(_filter))])
+
+        images = np.swapaxes(images, 2, 3)
+
+        if self.rot:
+            raise NotImplementedError
+        
+        result = pywt.swtn(images[0], self.wavelet, level=level, axes=axis_list)[level-1]
+
+        return np.swapaxes(result[_index], 2, 1)
