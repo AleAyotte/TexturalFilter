@@ -380,6 +380,25 @@ class Laws(Filter):
 
         return not(ker_length.min == ker_length.max)
 
+    def __print_perm(self, filter_list):
+        ver_ker = []
+        ker_list = np.array([[self.__get_filter(name, True) for name in self.config]])
+        ker_list = np.concatenate((ker_list, np.flip(ker_list, axis=2)), axis=1)
+        ker_list = np.squeeze(ker_list, axis=0)
+        name_list = [name for name in self.config]
+        name_list2 = ["J" + name for name in self.config]
+        name_list = np.concatenate((name_list, name_list2), axis=0)
+        print(name_list)
+        for i in range(len(filter_list)):
+            li = []
+            for j in range(len(filter_list[i])):
+                for k in range(len(name_list)):
+                    if (filter_list[i][j] == ker_list[k]).all():
+                        li.extend([name_list[k]])
+            ver_ker.extend([li])
+        print(np.array(ver_ker))
+        print(np.shape(ver_ker))
+
     def create_kernel(self):
         """
         Create the Laws by computing the outer product of 1d filter specified in the config attribute.
@@ -398,8 +417,8 @@ class Laws(Filter):
             perm_list = []
             for i in range(len(prod_list)):
                 perm_list.extend([perm for perm in permutations(prod_list[i])])
-
             perm_list = np.unique(perm_list, axis=0)
+            # self.__print_perm(perm_list)
             filter_list = perm_list
 
         kernel_list = []
@@ -415,7 +434,8 @@ class Laws(Filter):
 
             kernel_list.extend([np.expand_dims(np.flip(kernel, axis=(-1, 1)), axis=0)])
 
-        self.kernel = np.array(kernel_list)
+        # self.kernel = np.array(kernel_list)
+        self.kernel = np.unique(kernel_list, axis=0)
 
     def __create_energy_kernel(self):
         """
@@ -443,19 +463,27 @@ class Laws(Filter):
         """
 
         with torch.no_grad():
-            # We convert the kernel and to images into torch tensor
-            _in = torch.from_numpy(images).float().to(device)
-            _filter = torch.from_numpy(self.energy_kernel).float().to(device)
+            # We convert the kernel and the images into torch tensor
+            _filter = torch.from_numpy(self.energy_kernel).float()
+            _in = torch.from_numpy(images).float().abs()
 
-            # Operate the convolution
-            return self.conv(_in.abs_(), _filter).to(device)
+            if device == "cpu":
+                # Compute on cpu need much more RAM, so we need to process one image at time.
+                result_list = []
+                for i in range(len(images)):
+                    result_list.extend([self.conv(_in[i].unsqueeze(0), _filter)])
+
+                return torch.squeeze(torch.stack(result_list), dim=1)
+
+            else:
+                return self.conv(_in.to(device), _filter.to(device))
 
     def convolve(self, images, orthogonal_rot=False, energy_image=False, device="cpu"):
         """
         Filter a given image using the Laws kernel defined during the construction of this instance.
 
         :param images: A n-dimensional numpy array that represent the images to filter
-        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagittal axis
         :param energy_image: If true, return also the Laws Texture Energy Images
         :param device: On which device do we need to compute the convolution
         :return: The filtered image
@@ -525,7 +553,7 @@ class Wavelet():
 
         if self.rot:
             raise NotImplementedError
-        
+
         result = pywt.swtn(images[0], self.wavelet, level=level, axes=axis_list)[level-1]
 
         return np.swapaxes(result[_index], 2, 1)
