@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 import numpy as np
 import os
+import torch
 
 
 def get_input(image_name, repertory="Data"):
@@ -188,6 +189,7 @@ def plot_comparison(result, ground_truth, _slice):
 
 
 def main(args):
+    torch.set_num_threads(1)
     _in, result, ground_truth = execute_test(test_id=args.test_id, device=args.device)
     plot_comparison(result, ground_truth, _slice=args.slice)
     return 0
