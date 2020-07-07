@@ -381,6 +381,13 @@ class Laws(Filter):
         return not(ker_length.min == ker_length.max)
 
     def __print_perm(self, filter_list):
+        """
+        Print all axis permutation and flip that is applied on the laws kernel.
+
+        :param filter_list: A numpy nd-array that represent the list of filter. (B, C, D*, H, W)
+                            In the 3D case only
+        """
+        
         ver_ker = []
         ker_list = np.array([[self.__get_filter(name, True) for name in self.config]])
         ker_list = np.concatenate((ker_list, np.flip(ker_list, axis=2)), axis=1)
