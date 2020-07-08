@@ -380,32 +380,6 @@ class Laws(Filter):
 
         return not(ker_length.min == ker_length.max)
 
-    def __print_perm(self, filter_list):
-        """
-        Print all axis permutation and flip that is applied on the laws kernel.
-
-        :param filter_list: A numpy nd-array that represent the list of filter. (B, C, D*, H, W)
-                            *In the 3D case only.
-        """
-
-        ver_ker = []
-        ker_list = np.array([[self.__get_filter(name, True) for name in self.config]])
-        ker_list = np.concatenate((ker_list, np.flip(ker_list, axis=2)), axis=1)
-        ker_list = np.squeeze(ker_list, axis=0)
-        name_list = [name for name in self.config]
-        name_list2 = ["J" + name for name in self.config]
-        name_list = np.concatenate((name_list, name_list2), axis=0)
-        print(name_list)
-        for i in range(len(filter_list)):
-            li = []
-            for j in range(len(filter_list[i])):
-                for k in range(len(name_list)):
-                    if (filter_list[i][j] == ker_list[k]).all():
-                        li.extend([name_list[k]])
-            ver_ker.extend([li])
-        print(np.array(ver_ker))
-        print(np.shape(ver_ker))
-
     def create_kernel(self):
         """
         Create the Laws by computing the outer product of 1d filter specified in the config attribute.
@@ -424,12 +398,10 @@ class Laws(Filter):
             perm_list = []
             for i in range(len(prod_list)):
                 perm_list.extend([perm for perm in permutations(prod_list[i])])
-            perm_list = np.unique(perm_list, axis=0)
-            # self.__print_perm(perm_list)
-            filter_list = perm_list
+
+            filter_list = np.unique(perm_list, axis=0)
 
         kernel_list = []
-
         for perm in filter_list:
             kernel = perm[0]
             shape = kernel.shape
@@ -600,7 +572,7 @@ class Wavelet(Filter):
         axis_list = [i for i in range(1, self.dim+1)]
         images = self._pad_imgs(images, padding, axis_list)
 
-        # We generate the to collect the result from pywavelet dictionnary
+        # We generate the to collect the result from pywavelet dictionary
         _index = str().join(['a' if _filter[i] == 'L' else 'd' for i in range(len(_filter))])
 
         if self.rot:
@@ -614,7 +586,6 @@ class Wavelet(Filter):
 
                 res_rot = []
                 for i in range(len(images_rot)):
-                    # filtered_image = pywt.swtn(images_rot[i], self.wavelet, level=level)[level-1]
                     filtered_image = pywt.swtn(images_rot[i], self.wavelet, level=level)[0]
                     res_rot.extend([np.flip(filtered_image[j], axis=axis_rot[i]) for j in _index_list])
 
