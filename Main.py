@@ -8,7 +8,7 @@
     @Description:       Main program used to test the Filter class and it subclasses.
 """
 import argparse
-from Filter import LaplacianOfGaussian, Laws, Gabor
+from Filter import LaplacianOfGaussian, Laws, Gabor, Wavelet
 import math
 import matplotlib.pyplot as plt
 import nibabel as nib
@@ -135,6 +135,54 @@ def execute_test(test_id, device="cpu"):
                         padding="symmetric"
                         )
         result = _filter.convolve(_in, True, device=device)
+
+    elif test_id == "5a1":
+        _in = get_input("response", "Data")
+        _filter = Wavelet(ndims=3, wavelet_name="db2",
+                          rot_invariance=False,
+                          padding="constant"
+                          )
+        result = _filter.convolve(_in, _filter="LHL", level=1)
+
+    elif test_id == "5a2":
+        _in = get_input("response", "Data")
+        _filter = Wavelet(ndims=3, wavelet_name="db2",
+                          rot_invariance=True,
+                          padding="constant"
+                          )
+        result = _filter.convolve(_in, _filter="LHL", level=1)
+
+    elif test_id == "6a1":
+        _in = get_input("sphere", "Data")
+        _filter = Wavelet(ndims=3, wavelet_name="coif1",
+                          rot_invariance=False,
+                          padding="wrap"
+                          )
+        result = _filter.convolve(_in, _filter="HHL", level=1)
+
+    elif test_id == "6a2":
+        _in = get_input("sphere", "Data")
+        _filter = Wavelet(ndims=3, wavelet_name="coif1",
+                          rot_invariance=True,
+                          padding="wrap"
+                          )
+        result = _filter.convolve(_in, _filter="HHL", level=1)
+
+    elif test_id == "7a1":
+        _in = get_input("checkerboard", "Data")
+        _filter = Wavelet(ndims=3, wavelet_name="haar",
+                          rot_invariance=True,
+                          padding="symmetric"
+                          )
+        result = _filter.convolve(_in, _filter="LLL", level=2)
+
+    elif test_id == "7a2":
+        _in = get_input("checkerboard", "Data")
+        _filter = Wavelet(ndims=3, wavelet_name="haar",
+                          rot_invariance=True,
+                          padding="symmetric"
+                          )
+        result = _filter.convolve(_in, _filter="HHH", level=2)
     else:
         raise NotImplementedError
 
