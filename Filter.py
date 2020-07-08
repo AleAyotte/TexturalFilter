@@ -518,6 +518,8 @@ class Wavelet(Filter):
     def create_kernel(self, wavelet_name):
         """
         Get the wavelet object and his kernel length.
+
+        :param wavelet_name: A string that represent the wavelet name that will be use to create the kernel
         """
 
         self.wavelet = pywt.Wavelet(wavelet_name)
