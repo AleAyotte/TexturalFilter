@@ -15,7 +15,7 @@
 """
 
 from abc import ABC, abstractmethod
-from itertools import product, permutations
+from itertools import product, permutations, combinations
 import math
 import numpy as np
 import pywt
@@ -115,20 +115,20 @@ class Filter(ABC):
 
         return result
 
-    def _pad_imgs(self, images, padding, axes):
+    def _pad_imgs(self, images, padding, axis):
         """
         Apply padding on a 3d images using a 2D padding pattern.
 
         :param images: a numpy array that represent the image.
         :param padding: The padding length that will apply on each side of each axe.
-        :param axes: A list of axes on which the padding will be done.
+        :param axis: A list of axes on which the padding will be done.
         :return: A numpy array that represent the padded image.
         """
         pad_tuple = ()
         j = 1
 
         for i in range(np.ndim(images)):
-            if i in axes:
+            if i in axis:
                 pad_tuple += ((padding[-j], padding[-j]),)
                 j += 1
             else:
@@ -137,7 +137,7 @@ class Filter(ABC):
         return np.pad(images, pad_tuple, mode=self.padding)
 
     @abstractmethod
-    def create_kernel(self):
+    def create_kernel(self, *args):
         pass
 
 
@@ -385,9 +385,9 @@ class Laws(Filter):
         Print all axis permutation and flip that is applied on the laws kernel.
 
         :param filter_list: A numpy nd-array that represent the list of filter. (B, C, D*, H, W)
-                            In the 3D case only
+                            *In the 3D case only.
         """
-        
+
         ver_ker = []
         ker_list = np.array([[self.__get_filter(name, True) for name in self.config]])
         ker_list = np.concatenate((ker_list, np.flip(ker_list, axis=2)), axis=1)
@@ -521,9 +521,9 @@ class Laws(Filter):
             return np.swapaxes(result.cpu().numpy(), 1, 3)
 
 
-class Wavelet():
+class Wavelet(Filter):
     """
-    The wavelet filter class
+    The wavelet filter class.
     """
 
     def __init__(self, ndims, wavelet_name="haar", padding="symmetric", rot_invariance=False):
@@ -536,31 +536,92 @@ class Wavelet():
         :param rot_invariance: If true, rotation invariance will be done on the images.
         """
 
-        assert isinstance(ndims, int) and ndims > 0, "ndims should be a positive integer"
+        super().__init__(ndims, padding)
 
-        # super().__init__(ndims, padding)
-
-        self.dim = ndims
-        self.padding = padding
         self.rot = rot_invariance
+        self.wavelet = None
+        self.kernel_length = None
+        self.create_kernel(wavelet_name)
+
+    def create_kernel(self, wavelet_name):
+        """
+        Get the wavelet object and his kernel length.
+        """
+
         self.wavelet = pywt.Wavelet(wavelet_name)
+        self.kernel_length = max(self.wavelet.rec_len, self.wavelet.dec_len)
+
+    def __unpad(self, images, padding):
+        """
+        Unpad a batch of images
+
+        :param images: A numpy nd-array or a list that represent the batch of padded images.
+                      The shape should be (B, H, W) or (B, H, W, D)
+        :param padding: a list of length 2*self.dim that gives the length of padding on each side of each axis.
+        :return: A numpy nd-array or a list that represent the batch of unpadded images
+        """
+
+        if self.dim == 2:
+            return images[:, padding[0]:-padding[1], padding[2]:-padding[3]]
+        elif self.dim == 3:
+            return images[:, padding[0]:-padding[1], padding[2]:-padding[3], padding[4]:-padding[5]]
+        else:
+            raise NotImplementedError
+
+    def __get_pad_length(self, image_shape, level):
+        """
+        Compute the padding length needed to have a padded image where the length along each axis is a multiple
+        2^level.
+
+        :param image_shape: a list of integer that describe the length of the image along each axis.
+        :param level: The level of the wavelet transform
+        :return: An integer list of length 2*self.dim that gives the length of padding on each side of each axis.
+        """
+        padding = []
+        ker_length = self.kernel_length*level
+        for l in image_shape:
+            padded_length = math.ceil((l + 2*(ker_length-1)) / 2**level) * 2**level - l
+            padding.extend([math.floor(padded_length/2), math.ceil(padded_length/2)])
+
+        return padding
 
     def convolve(self, images, _filter="LHL", level=1):
         """
+        Filter a given batch of images using pywavelet.
 
         :param images: A n-dimensional numpy array that represent the images to filter
         :param _filter: The filter to uses.
         :param level: The number of decomposition step to perform.
         :return: The filtered image as numpy nd-array
         """
-        axis_list = [-i for i in range(self.dim)]
+
+        # We pad the images
+        padding = self.__get_pad_length(np.shape(images[0]), level)
+        axis_list = [i for i in range(1, self.dim+1)]
+        images = self._pad_imgs(images, padding, axis_list)
+
+        # We generate the to collect the result from pywavelet dictionnary
         _index = str().join(['a' if _filter[i] == 'L' else 'd' for i in range(len(_filter))])
 
-        images = np.swapaxes(images, 2, 3)
-
         if self.rot:
-            raise NotImplementedError
+            result = []
+            _index_list = np.unique([str().join(perm) for perm in permutations(_index, self.dim)])
 
-        result = pywt.swtn(images[0], self.wavelet, level=level, axes=axis_list)[level-1]
+            # For each images, we flip each axis.
+            for image in images:
+                axis_rot = [comb for j in range(self.dim+1) for comb in combinations(np.arange(self.dim), j)]
+                images_rot = [np.flip(image, axis) for axis in axis_rot]
 
-        return np.swapaxes(result[_index], 2, 1)
+                res_rot = []
+                for i in range(len(images_rot)):
+                    # filtered_image = pywt.swtn(images_rot[i], self.wavelet, level=level)[level-1]
+                    filtered_image = pywt.swtn(images_rot[i], self.wavelet, level=level)[0]
+                    res_rot.extend([np.flip(filtered_image[j], axis=axis_rot[i]) for j in _index_list])
+
+                result.extend([np.mean(res_rot, axis=0)])
+        else:
+            result = []
+            for i in range(len(images)):
+                result.extend([pywt.swtn(images[i], self.wavelet, level=level)[level-1][_index]])
+
+        return self.__unpad(np.array(result), padding)
