@@ -8,7 +8,7 @@
     @Description:       Main program used to test the Filter class and it subclasses.
 """
 import argparse
-from Filter import LaplacianOfGaussian, Laws, Gabor, Wavelet
+from Filter import Mean, LaplacianOfGaussian, Laws, Gabor, Wavelet
 import math
 import matplotlib.pyplot as plt
 import nibabel as nib
@@ -42,6 +42,22 @@ def execute_test(test_id, device="cpu"):
     """
 
     VOLEX_LENGTH = 2
+
+    if test_id == "1a1":
+        _in = get_input("checkerboard", "Data")
+        _filter = Mean(3, 15, padding="constant")
+
+    if test_id == "1a2":
+        _in = get_input("checkerboard", "Data")
+        _filter = Mean(3, 15, padding="edge")
+
+    if test_id == "1a3":
+        _in = get_input("checkerboard", "Data")
+        _filter = Mean(3, 15, padding="wrap")
+
+    if test_id == "1a4":
+        _in = get_input("checkerboard", "Data")
+        _filter = Mean(3, 15, padding="symmetric")
 
     if test_id == "2a":
         _in = get_input("response", "Data")
@@ -237,7 +253,7 @@ def plot_comparison(result, ground_truth, _slice):
 
 
 def main(args):
-    torch.set_num_threads(1)
+    # torch.set_num_threads(1)
     _in, result, ground_truth = execute_test(test_id=args.test_id, device=args.device)
     plot_comparison(result, ground_truth, _slice=args.slice)
     return 0
