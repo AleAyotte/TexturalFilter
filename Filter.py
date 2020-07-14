@@ -161,7 +161,6 @@ class Mean(Filter):
         super().__init__(ndims, padding)
 
         self.size = int(size)
-        self.sigma = sigma
         self.create_kernel()
 
     def create_kernel(self):
@@ -240,6 +239,7 @@ class LaplacianOfGaussian(Filter):
         for k in product(range(self.size), repeat=self.dim):
             kernel[k] = compute_weight(np.array(k)-int((self.size-1)/2))
 
+        kernel -= np.sum(kernel)/np.prod(kernel.shape)
         self.kernel = np.expand_dims(kernel, axis=(0, 1))
 
     def convolve(self, images, orthogonal_rot=False, device="cpu"):
