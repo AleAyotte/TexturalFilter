@@ -46,24 +46,27 @@ def execute_test(test_id, device="cpu"):
     if test_id == "1a1":
         _in = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="constant")
+        result = _filter.convolve(_in, device=device)
 
-    if test_id == "1a2":
+    elif test_id == "1a2":
         _in = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="edge")
+        result = _filter.convolve(_in, device=device)
 
-    if test_id == "1a3":
+    elif test_id == "1a3":
         _in = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="wrap")
+        result = _filter.convolve(_in, device=device)
 
-    if test_id == "1a4":
+    elif test_id == "1a4":
         _in = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="symmetric")
+        result = _filter.convolve(_in, device=device)
 
-    if test_id == "2a":
+    elif test_id == "2a":
         _in = get_input("response", "Data")
         sigma = 3 / VOLEX_LENGTH
         length = int(2 * 4 * sigma + 1)
-
         _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="constant")
         result = _filter.convolve(_in, device=device)
 
@@ -91,17 +94,17 @@ def execute_test(test_id, device="cpu"):
 
     elif test_id == "3b1":
         _in = get_input("checkerboard", "Data")
-        _filter = Laws(["E5", "W5", "R5"], padding="symmetric", rot_invariance=False)
+        _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=False)
         result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3b2":
         _in = get_input("checkerboard", "Data")
-        _filter = Laws(["E5", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
         result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3b3":
         _in = get_input("checkerboard", "Data")
-        _filter = Laws(["E5", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
         _, result = _filter.convolve(_in, energy_image=True, device=device)
 
     elif test_id == "4a1":
@@ -204,7 +207,7 @@ def execute_test(test_id, device="cpu"):
 
     ground_truth = get_input("Phase1_"+test_id, "Result_Martin")
 
-    return _in, result / 255, ground_truth / 255
+    return _in, result, ground_truth
 
 
 def plot_comparison(result, ground_truth, _slice):
@@ -216,11 +219,12 @@ def plot_comparison(result, ground_truth, _slice):
     :param _slice: Which slice will be plot along each axis.
     """
 
-    error = (ground_truth - result) ** 2
+    error = abs(ground_truth - result)
+    # print(np.max(error), np.max(ground_truth), np.max(result))
     mean_square_error = np.mean(error)
 
     fig = plt.figure(figsize=(12, 12))
-    fig.suptitle('Mean square error: {}'.format(mean_square_error), fontsize=16)
+    fig.suptitle('Mean absolute error: {}'.format(mean_square_error), fontsize=16)
 
     fig.add_subplot(3, 3, 1, ylabel="Ground truth", title="Coronal")
     plt.imshow(ground_truth[0, :, :, _slice])
@@ -253,9 +257,13 @@ def plot_comparison(result, ground_truth, _slice):
 
 
 def main(args):
-    # torch.set_num_threads(1)
+    torch.set_num_threads(1)
     _in, result, ground_truth = execute_test(test_id=args.test_id, device=args.device)
     plot_comparison(result, ground_truth, _slice=args.slice)
+
+    # img = nib.Nifti1Image(result, np.eye(4))  # Save axis for data (just identity)
+    # img.header.get_xyzt_units()
+    # img.to_filename(args.test_id + '.nii.gz')  # Save as NiBabel file
     return 0
 
 
