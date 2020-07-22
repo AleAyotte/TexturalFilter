@@ -10,3 +10,4 @@ result.csv
 *.nrrd
 IBSI_2.pdf
 test_file.py
+.idea/TexturalFilter.iml

@@ -308,21 +308,112 @@ class Gabor(Filter):
         return np.swapaxes(result.cpu().numpy(), 1, 3)
 
 
+class Sobel(Filter):
+    """
+    The Gabor filter class
+    """
+
+    def __init__(self, ndims, rot_invariance=False, padding="symmetric"):
+        """
+        The constructor of the Gabor filter. Highly inspired by Ref 1)
+
+        :param ndims: Number of dimension of the kernel filter
+        :param rot_invariance: If true, rotation invariance will be done on the kernel.
+        :param padding: The padding type that will be used to produce the convolution
+        """
+
+        assert isinstance(ndims, int) and ndims > 0, "ndims should be a positive integer"
+        super().__init__(ndims=ndims, padding=padding)
+
+        self.rot = rot_invariance
+        self.create_kernel()
+
+    def create_kernel(self):
+        """
+        Create the kernel of the Gabor filter
+
+        :return: A list of numpy 2D-array that contain the kernel of the real part and the imaginary part respectively.
+        """
+
+        if self.dim == 2:
+            x_grad = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+            y_grad = np.array([[1, 2, 1], [0, 0, 0], [-1, -2, -1]])
+
+            grad_list = np.concatenate((x_grad, y_grad), axis=0),
+
+        elif self.dim == 3:
+            x_grad = [np.array([[[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+                               [[-2, 0, 2], [-4, 0, 4], [-2, 0, 2]],
+                               [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]])]
+            y_grad = [np.array([[[1, 2, 1], [0, 0, 0], [-1, -2, -1]],
+                               [[2, 4, 2], [0, 0, 0], [-2, -4, -2]],
+                               [[1, 2, 1], [0, 0, 0], [-1, -2, -1]]])]
+            z_grad = [np.array([[[-1, -2, -1], [-2, -4, -2], [-1, -2, -1]],
+                               [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+                               [[1, 2, 1], [2, 4, 2], [1, 2, 1]]])]
+
+            grad_list = np.concatenate((x_grad, y_grad, z_grad), axis=0)
+        else:
+            raise NotImplementedError
+
+        # rotation invariance
+        if self.rot:
+            grad_list = np.concatenate(([grad_list], [-grad_list]), axis=0)
+            grad_list = np.swapaxes(grad_list, axis1=0, axis2=1)
+            shape = grad_list.shape
+            grad_list = np.reshape(grad_list, newshape=(1, shape[0] * shape[1], *shape[2:])).squeeze(axis=0)
+
+        # Add the channel axis
+        self.kernel = np.expand_dims(grad_list, axis=1)
+
+    def convolve(self, images, orthogonal_rot=False, device="cpu"):
+        """
+        Filter a given image using the Gabor kernel defined during the construction of this instance.
+
+        :param images: A n-dimensional numpy array that represent the images to filter
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagittal axis
+        :param device: On which device do we need to compute the convolution
+        :return: The filtered image as a numpy ndarray
+        """
+
+        assert not(self.dim == 3 and orthogonal_rot), "We cannot "
+        # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
+        image = np.swapaxes(images, 1, 3)
+
+        result = self._convolve(image, orthogonal_rot, device)
+
+        with torch.no_grad():
+            # Reshape two get real and imaginary response on the first axis.
+            _dim = 2 if orthogonal_rot else 1
+            nb_rot = self.dim if self.rot else 1
+            result = torch.stack(torch.split(result, nb_rot, _dim), dim=1)
+
+            # 2D modulus response map
+            result = torch.norm(result.to(device), dim=0)
+
+            # Rotation invariance.
+            result = torch.mean(result, dim=2) if orthogonal_rot else torch.mean(result, dim=1)
+
+            # Aggregate orthogonal rotation
+            result = torch.mean(result, dim=0) if orthogonal_rot else result
+        return np.swapaxes(result.cpu().numpy(), 1, 3)
+
+
 class Laws(Filter):
     """
     The Laws filter class
     """
 
-    def __init__(self, config=None, padding="symmetric", energy_distance=7, rot_invariance=False):
+    def __init__(self, config=None, energy_distance=7, rot_invariance=False, padding="symmetric"):
         """
         The constructor of the Laws filter
 
         :param config: A string list of every 1D filter used to create the Laws kernel. Since the outer product is
                        not commutative, we need to use a list to specify the order of the outer product. It is not
                        recommended to use filter of different size to create the Laws kernel.
-        :param padding: The padding type that will be used to produce the convolution
         :param energy_distance: The distance that will be used to create the energy_kernel.
         :param rot_invariance: If true, rotation invariance will be done on the kernel.
+        :param padding: The padding type that will be used to produce the convolution
         """
 
         ndims = len(config)
