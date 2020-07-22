@@ -141,6 +141,56 @@ class Filter(ABC):
         pass
 
 
+class Mean(Filter):
+    """
+    The mean filter class
+    """
+
+    def __init__(self, ndims, size, padding="symmetric"):
+        """
+        The constructor of the mean filter
+
+        :param ndims: Number of dimension of the kernel filter
+        :param size: An integer that represent the length along one dimension of the kernel.
+        :param padding: The padding type that will be used to produce the convolution
+        """
+
+        assert isinstance(ndims, int) and ndims > 0, "ndims should be a positive integer"
+        assert ((size+1)/2).is_integer() and size > 0, "size should be a positive odd number."
+
+        super().__init__(ndims, padding)
+
+        self.size = int(size)
+        self.create_kernel()
+
+    def create_kernel(self):
+        """
+        This method construct the mean kernel using the parameters specified to the constructor
+
+        :return: The mean kernel as a numpy multidimensionnal array
+        """
+
+        # Initialize the kernel as tensor of zeros
+        weight = 1 / np.prod(self.size ** self.dim)
+        kernel = np.ones([self.size for _ in range(self.dim)]) * weight
+
+        self.kernel = np.expand_dims(kernel, axis=(0, 1))
+
+    def convolve(self, images, orthogonal_rot=False, device="cpu"):
+        """
+        Filter a given image using the LoG kernel defined during the construction of this instance.
+
+        :param images: A n-dimensional numpy array that represent the images to filter
+        :param orthogonal_rot: If true, the 3D images will be rotated over coronal, axial and sagital axis
+        :param device: On which device do we need to compute the convolution
+        :return: The filtered image
+        """
+        # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
+        image = np.swapaxes(images, 1, 3)
+        result = torch.squeeze(self._convolve(image, orthogonal_rot, device), dim=1)
+        return np.swapaxes(result.cpu().numpy(), 1, 3)
+
+
 class LaplacianOfGaussian(Filter):
     """
     The Laplacian of gaussian filter class.
@@ -189,6 +239,7 @@ class LaplacianOfGaussian(Filter):
         for k in product(range(self.size), repeat=self.dim):
             kernel[k] = compute_weight(np.array(k)-int((self.size-1)/2))
 
+        kernel -= np.sum(kernel)/np.prod(kernel.shape)
         self.kernel = np.expand_dims(kernel, axis=(0, 1))
 
     def convolve(self, images, orthogonal_rot=False, device="cpu"):
