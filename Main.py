@@ -29,7 +29,8 @@ def get_input(image_name, repertory="Data"):
     example_filename = os.path.join(
         repertory, image_name + '.nii'
     )
-    return np.expand_dims(np.array(nib.load(example_filename).dataobj), axis=0)
+    complete_data = nib.load(example_filename)
+    return np.expand_dims(np.array(complete_data.dataobj), axis=0), complete_data
 
 
 def execute_test(test_id, device="cpu"):
@@ -44,71 +45,71 @@ def execute_test(test_id, device="cpu"):
     VOLEX_LENGTH = 2
 
     if test_id == "1a1":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="constant")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "1a2":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="edge")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "1a3":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="wrap")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "1a4":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Mean(3, 15, padding="symmetric")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "2a":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         sigma = 3 / VOLEX_LENGTH
         length = int(2 * 4 * sigma + 1)
         _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="constant")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "2b":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         sigma = 5 / VOLEX_LENGTH
         length = int(2 * 4 * sigma + 1)
         _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="symmetric")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "3a1":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         _filter = Laws(["E5", "L5", "S5"], padding="constant", rot_invariance=False)
         result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3a2":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         _filter = Laws(["E5", "L5", "S5"], padding="constant", rot_invariance=True)
         result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3a3":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         _filter = Laws(["E5", "L5", "S5"], padding="constant", rot_invariance=True)
         _, result = _filter.convolve(_in, energy_image=True, device=device)
 
     elif test_id == "3b1":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=False)
         result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3b2":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
         result = _filter.convolve(_in, energy_image=False, device=device)
 
     elif test_id == "3b3":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
         _, result = _filter.convolve(_in, energy_image=True, device=device)
 
     elif test_id == "4a1":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         sigma = 10 / VOLEX_LENGTH
         lamb = 4 / VOLEX_LENGTH
         size = int(2*7*sigma+1)
@@ -120,7 +121,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, False, device=device)
 
     elif test_id == "4a2":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         sigma = 10 / VOLEX_LENGTH
         lamb = 4 / VOLEX_LENGTH
         size = int(2*7*sigma+1)
@@ -132,7 +133,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, True, device=device)
 
     elif test_id == "4b1":
-        _in = get_input("sphere", "Data")
+        _in, complete_data = get_input("sphere", "Data")
         sigma = 20 / VOLEX_LENGTH
         lamb = 8 / VOLEX_LENGTH
         size = int(2*7*sigma+1)
@@ -144,7 +145,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, False, device=device)
 
     elif test_id == "4b2":
-        _in = get_input("sphere", "Data")
+        _in, complete_data = get_input("sphere", "Data")
         sigma = 20 / VOLEX_LENGTH
         lamb = 8 / VOLEX_LENGTH
         size = int(2*7*sigma+1)
@@ -156,7 +157,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, True, device=device)
 
     elif test_id == "5a1":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         _filter = Wavelet(ndims=3, wavelet_name="db2",
                           rot_invariance=False,
                           padding="constant"
@@ -164,7 +165,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, _filter="LHL", level=1)
 
     elif test_id == "5a2":
-        _in = get_input("response", "Data")
+        _in, complete_data = get_input("response", "Data")
         _filter = Wavelet(ndims=3, wavelet_name="db2",
                           rot_invariance=True,
                           padding="constant"
@@ -172,7 +173,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, _filter="LHL", level=1)
 
     elif test_id == "6a1":
-        _in = get_input("sphere", "Data")
+        _in, complete_data = get_input("sphere", "Data")
         _filter = Wavelet(ndims=3, wavelet_name="coif1",
                           rot_invariance=False,
                           padding="wrap"
@@ -180,7 +181,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, _filter="HHL", level=1)
 
     elif test_id == "6a2":
-        _in = get_input("sphere", "Data")
+        _in, complete_data = get_input("sphere", "Data")
         _filter = Wavelet(ndims=3, wavelet_name="coif1",
                           rot_invariance=True,
                           padding="wrap"
@@ -188,7 +189,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, _filter="HHL", level=1)
 
     elif test_id == "7a1":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Wavelet(ndims=3, wavelet_name="haar",
                           rot_invariance=True,
                           padding="symmetric"
@@ -196,7 +197,7 @@ def execute_test(test_id, device="cpu"):
         result = _filter.convolve(_in, _filter="LLL", level=2)
 
     elif test_id == "7a2":
-        _in = get_input("checkerboard", "Data")
+        _in, complete_data = get_input("checkerboard", "Data")
         _filter = Wavelet(ndims=3, wavelet_name="haar",
                           rot_invariance=True,
                           padding="symmetric"
@@ -205,9 +206,9 @@ def execute_test(test_id, device="cpu"):
     else:
         raise NotImplementedError
 
-    ground_truth = get_input("Phase1_"+test_id, "Result_Martin")
+    ground_truth, _ = get_input("Phase1_"+test_id, "Result_Martin")
 
-    return _in, result, ground_truth
+    return _in, result, ground_truth, complete_data
 
 
 def plot_comparison(result, ground_truth, _slice):
@@ -220,7 +221,7 @@ def plot_comparison(result, ground_truth, _slice):
     """
 
     error = abs(ground_truth - result)
-    # print(np.max(error), np.max(ground_truth), np.max(result))
+    print(np.max(error), np.max(ground_truth), np.max(result))
     mean_square_error = np.mean(error)
 
     fig = plt.figure(figsize=(12, 12))
@@ -258,12 +259,15 @@ def plot_comparison(result, ground_truth, _slice):
 
 def main(args):
     torch.set_num_threads(1)
-    _in, result, ground_truth = execute_test(test_id=args.test_id, device=args.device)
-    plot_comparison(result, ground_truth, _slice=args.slice)
+    _in, result, ground_truth, complete_data = execute_test(test_id=args.test_id, device=args.device)
 
-    # img = nib.Nifti1Image(result, np.eye(4))  # Save axis for data (just identity)
-    # img.header.get_xyzt_units()
-    # img.to_filename(args.test_id + '.nii.gz')  # Save as NiBabel file
+    if args.compare:
+        plot_comparison(result, ground_truth, _slice=args.slice)
+
+    if args.save:
+        complete_data.set_data_dtype(np.float32)
+        img = nib.Nifti2Image(np.squeeze(result), affine=complete_data.affine, header=complete_data.header)
+        img.to_filename("Result_Alex/" + args.test_id + '.nii.gz')  # Save as NiBabel file
     return 0
 
 
@@ -289,6 +293,24 @@ if __name__ == '__main__':
         type=int,
         default=31,
         help='Which slice will be plot..'
+    )
+
+    parser.add_argument(
+        '--save',
+        type=bool,
+        nargs='?',
+        const=True,
+        default=False,
+        help='Save the result'
+    )
+
+    parser.add_argument(
+        '--compare',
+        type=bool,
+        nargs='?',
+        const=True,
+        default=False,
+        help='Plot comparison with ground truth'
     )
     _args = parser.parse_args()
 
