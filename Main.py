@@ -29,7 +29,10 @@ def get_input(image_name, repertory="Data"):
     example_filename = os.path.join(
         repertory, image_name + '.nii'
     )
+
+    # complete_data = nib.load(example_filename).set_data_dtype(np.float32)
     complete_data = nib.load(example_filename)
+    complete_data.set_data_dtype(np.float32)
     return np.expand_dims(np.array(complete_data.dataobj), axis=0), complete_data
 
 
@@ -266,7 +269,7 @@ def main(args):
 
     if args.save:
         complete_data.set_data_dtype(np.float32)
-        img = nib.Nifti2Image(np.squeeze(result), affine=complete_data.affine, header=complete_data.header)
+        img = nib.Nifti1Image(np.squeeze(result), affine=complete_data.affine, header=complete_data.header)
         img.to_filename("Result_Alex/" + args.test_id + '.nii.gz')  # Save as NiBabel file
     return 0
 
