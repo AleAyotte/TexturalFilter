@@ -81,8 +81,8 @@ class Filter(ABC):
 
             with torch.no_grad():
                 # Convert into torch tensor
-                _in = torch.from_numpy(new_imgs).float().to(device)
-                _filter = torch.from_numpy(self.kernel).float().to(device)
+                _in = torch.from_numpy(new_imgs).double().to(device)
+                _filter = torch.from_numpy(self.kernel).double().to(device)
 
                 # Operate the convolution
                 result = self.conv(_in, _filter).to(device)
@@ -552,10 +552,11 @@ class Laws(Filter):
                 sub_kernel = perm[i]
                 shape += np.shape(sub_kernel)
                 kernel = np.outer(sub_kernel, kernel).reshape(shape)
+            if self.dim == 3:
+                kernel_list.extend([np.expand_dims(np.flip(kernel, axis=(1, 2)), axis=0)])
+            else:
+                kernel_list.extend([np.expand_dims(np.flip(kernel, axis=(0, 1)), axis=0)])
 
-            kernel_list.extend([np.expand_dims(np.flip(kernel, axis=(-1, 1)), axis=0)])
-
-        # self.kernel = np.array(kernel_list)
         self.kernel = np.unique(kernel_list, axis=0)
 
     def __create_energy_kernel(self):
@@ -582,22 +583,25 @@ class Laws(Filter):
         :param device: On which device do we need to compute the convolution
         :return:
         """
+        # If we have a 2D kernel but a 3D images, we swap dimension channel with dimension batch.
+        images = np.swapaxes(images, 0, 1)
 
         with torch.no_grad():
             # We convert the kernel and the images into torch tensor
-            _filter = torch.from_numpy(self.energy_kernel).float()
-            _in = torch.from_numpy(images).float().abs()
+            _filter = torch.from_numpy(self.energy_kernel).double()
+            _in = torch.from_numpy(images).double().abs()
 
             if device == "cpu":
                 # Compute on cpu need much more RAM, so we need to process one image at time.
-                result_list = []
-                for i in range(len(images)):
-                    result_list.extend([self.conv(_in[i].unsqueeze(0), _filter)])
-
-                return torch.squeeze(torch.stack(result_list), dim=1)
-
+                result_list = [self.conv(_in[i].unsqueeze(0), _filter) for i in range(len(images))]
+                result = torch.squeeze(torch.stack(result_list), dim=1)
             else:
-                return self.conv(_in.to(device), _filter.to(device))
+                result = self.conv(_in.to(device), _filter.to(device))
+
+            if self.dim == 2:
+                return torch.transpose(result, dim0=0, dim1=1)
+            else:
+                return torch.squeeze(result, dim=1)
 
     def convolve(self, images, orthogonal_rot=False, energy_image=False, device="cpu"):
         """
@@ -610,28 +614,27 @@ class Laws(Filter):
         :return: The filtered image
         """
 
-        # Swap the second axis with the last, to convert image B, W, H, D --> B, D, H, W
-        image = np.swapaxes(images, 1, 3)
-
         if orthogonal_rot:
             raise NotImplementedError
 
-        result = self._convolve(image, orthogonal_rot, device)
+        result = self._convolve(images, orthogonal_rot, device)
+        result, _ = torch.max(result, dim=1)
 
         if energy_image:
             # We pad the response map
+            result = result.unsqueeze(dim=1) if self.dim == 3 else result
+            ndims = result.ndim
+
             padding = [self.energy_dist for _ in range(2 * self.dim)]
-            pad_axis_list = [i for i in range(2, self.dim + 2)]
+            pad_axis_list = [i for i in range(ndims - self.dim, ndims)]
 
             response = self._pad_imgs(result.cpu().numpy(), padding, pad_axis_list)
 
-            # We compute the energy map and we apply the max pooling on the energy and the response maps
-            energy_imgs, _ = torch.max(self.__compute_energy_image(np.swapaxes(response, 0, 1), device), dim=0)
-            result, _ = torch.max(result, dim=1)
+            # We compute the energy map and we squeeze the second dimension of the energy maps.
+            energy_imgs = self.__compute_energy_image(response, device)
 
             return np.swapaxes(result.cpu().numpy(), 1, 3), np.swapaxes(energy_imgs.cpu().numpy(), 1, 3)
         else:
-            result, _ = torch.max(result, dim=1)
             return np.swapaxes(result.cpu().numpy(), 1, 3)
 
 
