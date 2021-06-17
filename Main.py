@@ -29,7 +29,7 @@ def get_input(image_name, repertory="Data"):
     example_filename = os.path.join(
         repertory, image_name + '.nii'
     )
-
+    
     complete_data = nib.load(example_filename)
     complete_data.set_data_dtype(np.float32)
     return np.expand_dims(np.array(complete_data.dataobj), axis=0), complete_data
@@ -66,6 +66,11 @@ def execute_test(test_id, device="cpu"):
         _filter = Mean(3, 15, padding="symmetric")
         result = _filter.convolve(_in, device=device)
 
+    elif test_id == "1b1":
+        _in, complete_data = get_input("response", "Data")
+        _filter = Mean(2, 15, padding="constant")
+        result = _filter.convolve(_in, device=device)
+
     elif test_id == "2a":
         _in, complete_data = get_input("response", "Data")
         sigma = 3 / VOLEX_LENGTH
@@ -78,6 +83,13 @@ def execute_test(test_id, device="cpu"):
         sigma = 5 / VOLEX_LENGTH
         length = int(2 * 4 * sigma + 1)
         _filter = LaplacianOfGaussian(3, length, sigma=sigma, padding="symmetric")
+        result = _filter.convolve(_in, device=device)
+
+    elif test_id == "2c":
+        _in, complete_data = get_input("checkerboard", "Data")
+        sigma = 5 / VOLEX_LENGTH
+        length = int(2 * 4 * sigma + 1)
+        _filter = LaplacianOfGaussian(2, length, sigma=sigma, padding="symmetric")
         result = _filter.convolve(_in, device=device)
 
     elif test_id == "3a1":
@@ -108,6 +120,21 @@ def execute_test(test_id, device="cpu"):
     elif test_id == "3b3":
         _in, complete_data = get_input("checkerboard", "Data")
         _filter = Laws(["E3", "W5", "R5"], padding="symmetric", rot_invariance=True)
+        _, result = _filter.convolve(_in, energy_image=True, device=device)
+
+    elif test_id == "3c1":
+        _in, complete_data = get_input("checkerboard", "Data")
+        _filter = Laws(["L5", "S5"], padding="symmetric", rot_invariance=False)
+        result = _filter.convolve(_in, energy_image=False, device=device)
+
+    elif test_id == "3c2":
+        _in, complete_data = get_input("checkerboard", "Data")
+        _filter = Laws(["L5", "S5"], padding="symmetric", rot_invariance=True)
+        result = _filter.convolve(_in, energy_image=False, device=device)
+
+    elif test_id == "3c3":
+        _in, complete_data = get_input("checkerboard", "Data")
+        _filter = Laws(["L5", "S5"], padding="symmetric", rot_invariance=True)
         _, result = _filter.convolve(_in, energy_image=True, device=device)
 
     elif test_id == "4a1":
@@ -208,7 +235,12 @@ def execute_test(test_id, device="cpu"):
     else:
         raise NotImplementedError
 
-    ground_truth, _ = get_input("Phase1_"+test_id, "Result_Martin")
+    try:
+        ground_truth, _ = get_input("Phase1_"+test_id, "Result_Martin")
+
+    except:
+        print("Ground truth file has not been found.")
+        ground_truth = None
 
     return _in, result, ground_truth, complete_data
 
@@ -222,46 +254,58 @@ def plot_comparison(result, ground_truth, _slice):
     :param _slice: Which slice will be plot along each axis.
     """
 
-    error = abs(ground_truth - result)
-    print(np.max(error), np.max(ground_truth), np.max(result))
-    mean_square_error = np.mean(error)
-
     fig = plt.figure(figsize=(12, 12))
-    fig.suptitle('Mean absolute error: {}'.format(mean_square_error), fontsize=16)
 
-    fig.add_subplot(3, 3, 1, ylabel="Ground truth", title="Coronal")
-    plt.imshow(ground_truth[0, :, :, _slice])
+    if ground_truth:
+        error = abs(ground_truth - result)
+        print(np.max(error), np.max(ground_truth), np.max(result))
+        mean_square_error = np.mean(error)
 
-    fig.add_subplot(3, 3, 2, title="Axial")
-    plt.imshow(ground_truth[0, :, _slice, :])
+        fig.suptitle('Mean absolute error: {}'.format(mean_square_error), fontsize=16)
 
-    fig.add_subplot(3, 3, 3, title="Sagittal")
-    plt.imshow(ground_truth[0, _slice, :, :])
+        fig.add_subplot(3, 3, 1, ylabel="Ground truth", title="Coronal")
+        plt.imshow(ground_truth[0, :, :, _slice])
 
-    fig.add_subplot(3, 3, 4, ylabel="Result")
-    plt.imshow(result[0, :, :, _slice])
+        fig.add_subplot(3, 3, 2, title="Axial")
+        plt.imshow(ground_truth[0, :, _slice, :])
 
-    fig.add_subplot(3, 3, 5)
-    plt.imshow(result[0, :, _slice, :])
+        fig.add_subplot(3, 3, 3, title="Sagittal")
+        plt.imshow(ground_truth[0, _slice, :, :])
 
-    fig.add_subplot(3, 3, 6)
-    plt.imshow(result[0, _slice, :, :])
+        fig.add_subplot(3, 3, 4, ylabel="Result")
+        plt.imshow(result[0, :, :, _slice])
 
-    fig.add_subplot(3, 3, 7, ylabel="square error")
-    plt.imshow(error[0, :, :, _slice])
+        fig.add_subplot(3, 3, 5)
+        plt.imshow(result[0, :, _slice, :])
 
-    fig.add_subplot(3, 3, 8)
-    plt.imshow(error[0, :, _slice, :])
+        fig.add_subplot(3, 3, 6)
+        plt.imshow(result[0, _slice, :, :])
 
-    fig.add_subplot(3, 3, 9)
-    plt.imshow(error[0, _slice, :, :])
+        fig.add_subplot(3, 3, 7, ylabel="square error")
+        plt.imshow(error[0, :, :, _slice])
+
+        fig.add_subplot(3, 3, 8)
+        plt.imshow(error[0, :, _slice, :])
+
+        fig.add_subplot(3, 3, 9)
+        plt.imshow(error[0, _slice, :, :])
+
+    else:
+        fig.add_subplot(1, 3, 1, ylabel="Result")
+        plt.imshow(result[0, :, :, _slice])
+
+        fig.add_subplot(1, 3, 2)
+        plt.imshow(result[0, :, _slice, :])
+
+        fig.add_subplot(1, 3, 3)
+        plt.imshow(result[0, _slice, :, :])
 
     plt.show()
 
 
 def main(args):
     torch.set_num_threads(1)
-    _in, result, ground_truth, complete_data = execute_test(test_id=args.test_id, device=args.device)
+    _, result, ground_truth, complete_data = execute_test(test_id=args.test_id, device=args.device)
 
     if args.compare:
         plot_comparison(result, ground_truth, _slice=args.slice)
